@@ -1,0 +1,1 @@
+./cap3 part_9 >part_9.out

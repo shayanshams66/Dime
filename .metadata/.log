@@ -319,3 +319,8 @@ Binding(CTRL+F4,
 
 !ENTRY org.scala-ide.sdt.core 1 0 2016-06-15 15:42:32.887
 !MESSAGE Turning off project-specific settings for test because of Settings are all identical to workspace after Xsource removal.
+
+!ENTRY org.eclipse.core.resources 2 2 2016-06-15 20:36:05.193
+!MESSAGE Save operation warnings.
+!SUBENTRY 1 org.eclipse.core.resources 2 234 2016-06-15 20:36:05.194
+!MESSAGE The project description file (.project) for 'RemoteSystemsTempFiles' was missing.  This file contains important information about the project.  A new project description file has been created, but some information about the project may have been lost.

@@ -1777,3 +1777,15 @@
 2016-06-15 20:09:26,973 [Worker-89] INFO  o.e.m.c.i.embedder.EclipseLogger - skip non existing resourceDirectory /home/shayanshams/Documents/workspace/cap3/src/main/resources
 2016-06-15 20:09:26,977 [Worker-89] INFO  o.e.m.c.i.embedder.EclipseLogger - Using 'UTF-8' encoding to copy filtered resources.
 2016-06-15 20:09:26,977 [Worker-89] INFO  o.e.m.c.i.embedder.EclipseLogger - skip non existing resourceDirectory /home/shayanshams/Documents/workspace/cap3/src/test/resources
+2016-06-15 20:31:05,315 [Worker-94] INFO  o.e.m.c.i.embedder.EclipseLogger - Using 'UTF-8' encoding to copy filtered resources.
+2016-06-15 20:31:05,316 [Worker-94] INFO  o.e.m.c.i.embedder.EclipseLogger - skip non existing resourceDirectory /home/shayanshams/Documents/workspace/cap3/src/main/resources
+2016-06-15 20:31:05,317 [Worker-94] INFO  o.e.m.c.i.embedder.EclipseLogger - Using 'UTF-8' encoding to copy filtered resources.
+2016-06-15 20:31:05,317 [Worker-94] INFO  o.e.m.c.i.embedder.EclipseLogger - skip non existing resourceDirectory /home/shayanshams/Documents/workspace/cap3/src/test/resources
+2016-06-15 20:31:23,658 [Worker-96] INFO  o.e.m.c.i.embedder.EclipseLogger - Using 'UTF-8' encoding to copy filtered resources.
+2016-06-15 20:31:23,658 [Worker-96] INFO  o.e.m.c.i.embedder.EclipseLogger - skip non existing resourceDirectory /home/shayanshams/Documents/workspace/cap3/src/main/resources
+2016-06-15 20:31:23,659 [Worker-96] INFO  o.e.m.c.i.embedder.EclipseLogger - Using 'UTF-8' encoding to copy filtered resources.
+2016-06-15 20:31:23,660 [Worker-96] INFO  o.e.m.c.i.embedder.EclipseLogger - skip non existing resourceDirectory /home/shayanshams/Documents/workspace/cap3/src/test/resources
+2016-06-15 20:38:38,097 [Worker-94] INFO  o.e.m.c.i.embedder.EclipseLogger - Using 'UTF-8' encoding to copy filtered resources.
+2016-06-15 20:38:38,097 [Worker-94] INFO  o.e.m.c.i.embedder.EclipseLogger - skip non existing resourceDirectory /home/shayanshams/Documents/workspace/cap3/src/main/resources
+2016-06-15 20:38:38,099 [Worker-94] INFO  o.e.m.c.i.embedder.EclipseLogger - Using 'UTF-8' encoding to copy filtered resources.
+2016-06-15 20:38:38,099 [Worker-94] INFO  o.e.m.c.i.embedder.EclipseLogger - skip non existing resourceDirectory /home/shayanshams/Documents/workspace/cap3/src/test/resources

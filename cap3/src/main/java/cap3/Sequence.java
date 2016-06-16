@@ -38,8 +38,10 @@ public class Sequence {
 	}
 	
 	public void add(int _val){
+		System.out.println(size);
 		System.out.println("first argument of add is "+ size/UNITLEN);
 		System.out.println("val is"+_val);
+		System.out.println("second arg of add is"+(_val<<(size%UNITLEN)*3));
 		arrSeq[size/UNITLEN] += (_val<<(size%UNITLEN)*3);
 		size++;
 	}
