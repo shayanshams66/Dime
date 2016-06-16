@@ -1,0 +1,529 @@
+package sshams2.cct.dime10.cap3;
+
+import java.io.FileWriter;
+import java.io.IOException;
+
+import mer.AlignReadSet;
+
+public class Contig {
+
+	private Read[] arrRead;
+	private int sizeArrRead = 0;
+	private int id;
+	private Sequence seq;
+	private int sizeSeq = 0;
+	
+	private int posRelative = 0;
+	private boolean rev = false;
+	
+	private int sedST;
+	private int sedED;
+	private Read lastRead;
+	private Read firstRead;
+	private double lamda = 0;
+	
+	private Contig[] arrConnectContigs;
+	private int sizeArrConnectContigs = 0;
+	
+	public Contig(int _id){
+		id = _id;
+	}
+	
+	public Contig(int[] _arrSeq, int _size, int _id, ReadG[] _arrRead){
+		seq = new Sequence(_arrSeq, _size);
+		id = _id;
+		sizeSeq = _size;
+		sizeArrRead = _arrRead.length;
+		arrRead = new Read[sizeArrRead];
+		for(int i=0;i<sizeArrRead;i++){
+			arrRead[i] = new Read(_arrRead[i].getSeq(), _arrRead[i].getSizeSeq(), _arrRead[i].getId(),
+					_arrRead[i].getIdContig(), _arrRead[i].getIdxST());
+		}
+	}
+	
+	/**
+	 * when connect another contig, add the contig to the one kept
+	 * it is for reverse and locate the position for edge
+	 * @param _c
+	 */
+	public void addContig(Contig _c){
+		if(arrConnectContigs==null){
+			arrConnectContigs = new Contig[10];
+		}
+		if(sizeArrConnectContigs>=arrConnectContigs.length){
+			Contig[] arrNew = new Contig[arrConnectContigs.length*3/2];
+			for(int i=0;i<arrConnectContigs.length;i++)arrNew[i] = arrConnectContigs[i];
+			arrConnectContigs = arrNew;
+		}
+		arrConnectContigs[sizeArrConnectContigs] = _c;
+		sizeArrConnectContigs++;
+	}
+	
+	public void addContigLen(int _len){
+		sizeSeq += _len;
+	}
+	
+	public void addRead(Read _read){
+		if(sizeArrRead>=arrRead.length){
+			Read[] arrNew = new Read[(int) Math.ceil(arrRead.length*1.5)];
+			for(int i=0;i<sizeArrRead;i++)arrNew[i] = arrRead[i];
+			arrRead = arrNew;
+		}
+		arrRead[sizeArrRead] = _read;
+		sizeArrRead++;
+	}
+	
+	public void addReadLen(int _idRead, int _len){
+		for(int i=0;i<sizeArrRead;i++){
+			if(arrRead[i].getId()==_idRead){
+				arrRead[i].addSizeSeq(_len);
+				return;
+			}
+		}
+		arrRead[sizeArrRead] = new Read(_idRead, id);
+		arrRead[sizeArrRead].addSizeSeq(_len);
+		sizeArrRead++;
+	}
+	
+	/**
+	 * 
+	 * @param _idRead
+	 * @param _line
+	 * @param _st
+	 * @param _ed exclude
+	 * @param _pos
+	 */
+	public void addReadSeq(int _idRead, String _line, int _st, int _ed, int _pos){
+		for(int i=0;i<sizeArrRead;i++){
+			if(arrRead[i].getId()==_idRead){
+				arrRead[i].addSeq(_line, _st, _ed, _pos + _st - 22, _pos + _ed - 22 - 1);
+				return;
+			}
+		}
+		System.out.println("error");
+	}
+	
+	/**
+	 * 
+	 * @param _seq
+	 * @param _st
+	 * @param _ed exclude
+	 */
+	public void addSeq(String _seq, int _st, int _ed){
+		seq.add(_seq, _st, _ed);
+		sizeSeq = seq.size();
+	}
+	
+	public void addToOtherContig(Contig _c1, int _st1, int _st2, int _ed1, int _ed2, boolean _rev){
+		for(int i=0;i<sizeArrRead;i++){
+			if(arrRead[i]!=null){
+				if(arrRead[i].getEd()>=_ed2){
+					arrRead[i].setED(arrRead[i].getEd() + _ed1 - _ed2);
+				}
+				if(arrRead[i].getSt()>=_ed2){
+					arrRead[i].setST(arrRead[i].getSt() + _ed1 - _ed2);
+				}
+				if(arrRead[i].getSt()<_st2){
+					arrRead[i].setST(arrRead[i].getSt() + _st1 - _st2);
+				}
+				if(arrRead[i].getEd()<_st2){
+					arrRead[i].setED(arrRead[i].getEd() + _st1 - _st2);
+				}
+				_c1.addRead(arrRead[i]);
+			}
+		}
+		this.posRelative = _ed1 - _ed2;
+		rev = _rev;
+	}
+	
+	/**
+	 * get the average cover for each base
+	 * @param _arr
+	 */
+	public double calLamda(int[] _arr, int[] _arrC){
+		int _sizeArr = 0;
+		double lenTemp = 0;
+		double sum = 0;
+		for(int i=0;i<seq.size();i++){
+			if(seq.get(i)==5) _arr[_sizeArr++] = i;
+			else lenTemp++;
+		}
+		for(int i=0;i<sizeArrRead;i++){
+			if(arrRead[i]==null)continue;
+			sum += (arrRead[i].getEd() - arrRead[i].getSt() + 1);
+			for(int j=0;j<_sizeArr;j++){
+				if(_arr[j]>=arrRead[i].getSt()&&_arr[j]<=arrRead[i].getEd())sum--;
+			}
+		}
+		this.lamda = sum / lenTemp;
+		_arrC[0] = (int) sum; _arrC[1] = (int) lenTemp;
+		return lamda;
+	}
+	
+	/**
+	 * change the read id in local to global
+	 * @param _arr index from 0
+	 */
+	public void changeReadIdGenovo(int[] _arr){
+		for(int i=0;i<this.sizeArrRead;i++){
+			this.arrRead[i].setId(_arr[this.arrRead[i].getId()-1]);
+		}
+	}
+	
+	/**
+	 * 1: delete the first read; 2: delete the last read
+	 * @param _status
+	 */
+	public void deleteRead(int _status){
+		if(_status==1){
+			int firstST = sizeSeq;
+			int idx = 0;
+			for(int i=0;i<sizeArrRead;i++){
+				if(arrRead[i]==null)continue;
+				if(arrRead[i].getSt()<firstST){
+					firstST = arrRead[i].getSt();
+					idx = i;
+				}
+				arrRead[idx] = null;
+			}
+		}else if(_status==2){
+			int lastED = 0;
+			int idx = 0;
+			for(int i=0;i<sizeArrRead;i++){
+				if(arrRead[i]==null)continue;
+				if(arrRead[i].getEd()>lastED){
+					lastED = arrRead[i].getEd();
+					idx = i;
+				}
+				arrRead[idx] = null;
+			}
+		}
+	}
+	
+	public int getSizeArrRead(){
+		return this.sizeArrRead;
+	}
+	
+	public int getReadId(int _idx){
+		if(arrRead[_idx]!=null){
+			return arrRead[_idx].getId();
+		}else{
+			return -1;
+		}
+	}
+	
+	/**
+	 * with empty
+	 * @param _idx
+	 * @return
+	 */
+	public int getSeq(int _idx){
+		return seq.get(_idx);
+	}
+	
+	public void getHitMiss(int _idx, int[] _arr){
+		int x = seq.get(_idx);
+		int y = 0;
+		for(int i=0;i<3;i++)_arr[i] = 0;
+		for(int i=0;i<sizeArrRead;i++){
+			if(arrRead[i]!=null){
+				y = arrRead[i].get(_idx);
+				if(y==-1)continue;
+				if(y==5){
+					_arr[2]++;//empty
+					continue;
+				}
+				if(y==x){
+					_arr[0]++;//hit
+					continue;
+				}
+				if(y!=x)_arr[1]++;//miss
+			}
+		}
+	}
+	
+	/*public int getSizeArrRead(){
+		return sizeArrRead;
+	}*/
+	
+	public int getId(){
+		return id;
+	}
+	
+	public int getPos(){
+		return sizeSeq;
+	}
+	
+	public Read getFirstRead(){
+		return firstRead;
+	}
+	
+	public Read getLastRead(){
+		return lastRead;
+	}
+	
+	public int getSecondST(){
+		return sedST;
+	}
+	
+	public int getSecondED(){
+		return sedED;
+	}
+	
+	public void setSequence(){
+		seq = new Sequence(sizeSeq);
+		for(int i=0;i<sizeArrRead;i++){
+			arrRead[i].initialSizeSeq();
+		}
+		sizeSeq = 0;
+	}
+	
+	public void setSequence(Sequence _seq){
+		seq = _seq;
+		this.sizeSeq = _seq.size();
+	}
+	
+	public void setSizeArrRead(int _size){
+		arrRead = new Read[_size];
+	}
+	
+	public int size(){
+		return seq.size();
+	}
+	
+	/**
+	 * get the positions of second and last second sequences
+	 */
+	public void secondInfo(){
+		int firstST = sizeSeq;
+		sedST = sizeSeq;
+		int firstED = 0;
+		sedED = 0;
+		for(int i=0;i<sizeArrRead;i++){
+			if(arrRead[i]==null)continue;
+			if(arrRead[i].getSt()<firstST){
+				sedST = firstST;
+				firstST = arrRead[i].getSt();
+				firstRead = arrRead[i];
+			}else if(arrRead[i].getSt()<sedST){
+				sedST = arrRead[i].getSt();
+			}
+			if(arrRead[i].getEd()>firstED){
+				sedED = firstED;
+				firstED = arrRead[i].getEd();
+				lastRead = arrRead[i];
+			}else if(arrRead[i].getEd()>sedED){
+				sedED = arrRead[i].getEd();
+			}
+		}
+	}
+	
+	/**
+	 * with the end edge to separate with colon
+	 */
+	public String toStringHadoop(StringBuffer _sb, int _baseId){
+		int firstST = sizeSeq;
+		int secondST = sizeSeq;
+		int firstED = 0;
+		int secondED = 0;
+		for(int i=0;i<sizeArrRead;i++){
+			if(arrRead[i].getSt()<firstST){
+				secondST = firstST;
+				firstST = arrRead[i].getSt();
+			}else if(arrRead[i].getSt()<secondST){
+				secondST = arrRead[i].getSt();
+			}
+			if(arrRead[i].getEd()>firstED){
+				secondED = firstED;
+				firstED = arrRead[i].getEd();
+			}else if(arrRead[i].getEd()>secondED){
+				secondED = arrRead[i].getEd();
+			}
+		}
+		_sb.delete(0, _sb.length());
+		return Integer.toString(id+_baseId)+","
+		+Integer.toString(secondST)+","
+		+Integer.toString(secondED)+","
+		+seq.get(_sb);
+	}
+
+	public int getSizeNoEmpty() {
+		return seq.sizeNoEmpty();
+	}
+	
+	/**
+	 * 
+	 * @param _st with '-'
+	 * @param _len no '-'
+	 * @return
+	 */
+	public int getPosFromNoEmWithEm(int _st, int _len){
+		return seq.posWithEmpty(_st, _len);
+	}
+	
+	
+	public int getPos(int _pos, boolean _rev){
+		if(!rev&&!_rev){
+			return seq.posWithEmpty(_pos-1)+ 1 + posRelative;
+		}
+		if(rev&&!_rev){
+			_pos = seq.posWithEmpty(_pos-1)+1;
+			_pos = sizeSeq - _pos - 1;
+			return _pos + posRelative;
+		}
+		if(rev&&_rev){
+			return seq.posWithEmpty(_pos-1)+1+posRelative;
+		}
+		if(!rev&&_rev){
+			_pos = seq.posWithEmpty(_pos-1)+1;
+			_pos = sizeSeq - _pos - 1;
+			return _pos + posRelative;
+		}
+		return _pos;
+	}
+	
+	
+	public int[] arrEmptyArr;
+	/**
+	 * 
+	 * @param _pos position without empty
+	 * @param _rev 
+	 * @return get the position with empty
+	 */
+	public int getPosNoEmptyWithEmpty(int _pos, boolean _rev){
+		if(arrEmptyArr==null){
+			int sum = 0;
+			for(int i=0;i<seq.size();i++){
+				if(seq.get(i)==5){
+					sum++;
+				}
+			}
+			arrEmptyArr = new int[sum];
+			int idx = 0;
+			for(int i=0;i<seq.size();i++){
+				if(seq.get(i)==5){
+					arrEmptyArr[idx] = i + 1 - idx;
+					idx++;
+				}
+			}
+		}
+		if(_rev == rev){
+			for(int i=0;i<arrEmptyArr.length;i++){
+				if(arrEmptyArr[i]>_pos){
+					return _pos + i - 1;
+				}
+			}
+			return _pos + arrEmptyArr.length;
+		}else{
+			_pos = seq.size() - arrEmptyArr.length - _pos - 1;
+			for(int i=0;i<arrEmptyArr.length;i++){
+				if(arrEmptyArr[i]>_pos){
+					return seq.size() - (_pos + i - 1) - 1;
+				}
+			}
+			return seq.size() - (_pos + arrEmptyArr.length);
+		}
+	}
+	
+	
+	
+	public boolean Rev(){
+		return rev;
+	}
+	
+	public void Rev(boolean _rev){
+		rev = _rev;
+	}
+	
+	/**
+	 * reverse the sequence of contig
+	 * @param _arr
+	 */
+	public void reverse(int[] _arr){
+		for(int i=0;i<arrRead.length;i++){
+			if(arrRead[i]==null)continue;
+			arrRead[i].reverse(_arr, sizeSeq);
+		}
+		seq.reverse(_arr);
+		rev = !rev;
+		for(int i=0;i<this.sizeArrConnectContigs;i++){
+			this.arrConnectContigs[i].Rev(!this.arrConnectContigs[i].rev);
+		}
+		secondInfo();
+	}
+	
+	public int getSeqNoEmpty(byte[] _arr, int _st, int _ed){
+		return seq.getSeqNoEmpty(_arr, _st, _ed);
+	}
+	
+	/**
+	 * get the reads overlap in the range _st to _ed
+	 * @param _st
+	 * @param _ed
+	 * @param _set
+	 * @param _fLeftRight
+	 */
+	public void getSetAlignRead(int _st, int _ed, AlignReadSet _set, boolean _fLeftRight){
+		if(_fLeftRight){
+			for(int i=0;i<this.sizeArrRead;i++){
+				if(arrRead[i]==null)continue;
+				if(this.arrRead[i].getEd()>=_st&&this.arrRead[i].getEd()<=_ed){
+					_set.popLeft().set(arrRead[i], _st, _ed);
+				}
+			}
+		}else{
+			for(int i=0;i<this.sizeArrRead;i++){
+				if(arrRead[i]==null)continue;
+				/*if(arrRead[i].getId()==885087)
+					System.out.println("check");*/
+				if(this.arrRead[i].getSt()>=_st&&this.arrRead[i].getSt()<=_ed){
+					_set.popRight().set(arrRead[i], _st, _ed);
+				}
+			}
+		}
+		
+	}
+	
+	/**
+	 * get the reads from another contig, change the end position
+	 * @param _oldED
+	 * @param _newED
+	 */
+	public void reSetReadED(int _oldED, int _newED){
+		int lenTemp = _newED - _oldED;
+		for(int i=0;i<sizeArrRead;i++){
+			if(arrRead[i]==null)continue;
+			if(arrRead[i].getEd()>_oldED){
+				arrRead[i].setED(arrRead[i].getEd() + lenTemp);
+			}
+		}
+	}
+	
+	
+	public void show(){
+		try {
+			FileWriter fw = new FileWriter(this.id+".txt");
+			for(int i=0;i<this.sizeArrRead;i++){
+				if(this.arrRead[i]!=null){
+					for(int j=0;j<this.sizeSeq;j++){
+						if(j<this.arrRead[i].getSt()||j>this.arrRead[i].getEd()){
+							fw.write(" ");
+						}else{
+							fw.write(Integer.toString(this.arrRead[i].getWithEmpty(j-this.arrRead[i].getSt())));
+						}
+					}
+					fw.write("\n");
+				}
+			}
+			for(int j=0;j<this.sizeSeq;j++){
+				fw.write(Integer.toString(this.seq.get(j)));
+			}
+			fw.flush();
+			fw.close();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+	}
+}

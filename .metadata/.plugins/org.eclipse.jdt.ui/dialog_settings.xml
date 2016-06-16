@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section name="Workbench">
+	<section name="FatJarPackageWizard">
+		<item value="/home/shayanshams/Documents/workspace" key="FatJarPackageWizardPage.ANTSCRIPT_LOCATION"/>
+		<item value="LocalMerge - cap3" key="FatJarPackageWizardPage.LAUNCH_CONFIGURATION_SELECTION_NAME"/>
+		<item value="/home/shayanshams/Desktop/step by step/step034.jar" key="FatJarPackageWizardPage.DESTINATION_PATH_SELECTION"/>
+		<item value="false" key="FatJarPackageWizardPage.ANTSCRIPT_SAVE"/>
+		<item value="1" key="FatJarPackageWizardPage.LIBRARY_HANDLING"/>
+		<list key="FatJarPackageWizardPage.DESTINATION_NAMES_ID">
+			<item value="/home/shayanshams/Desktop/step by step/step034.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step033.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step032.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step031.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step030.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step029.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step028.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step027.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step026.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step025.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step25.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step24.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step23.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step22.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step21.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step20.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step019.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step018.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step017.jar"/>
+			<item value="/home/shayanshams/Desktop/step by step/step016.jar"/>
+		</list>
+		<list key="FatJarPackageWizardPage.ANTSCRIPT_LOCATION_HISTORY">
+			<item value="/home/shayanshams/Documents/workspace.xml"/>
+			<item value=".xml"/>
+		</list>
+	</section>
+	<section name="OptionalMessageDialog.hide.">
+	</section>
+	<section name="quick_assist_proposal_size">
+	</section>
+	<section name="completion_proposal_size">
+	</section>
+	<section name="JavaElementSearchActions">
+	</section>
+</section>

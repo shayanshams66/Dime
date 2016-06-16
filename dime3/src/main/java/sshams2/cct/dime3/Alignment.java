@@ -1,0 +1,471 @@
+package sshams2.cct.dime3;
+
+
+public class Alignment {
+
+	private int maxalen;
+	private int maxrlen;
+	private byte[] buffA;
+	private int buffAlen = 0;
+	private byte[] R;
+	private int lenR = 0;
+	private double[][] FM1;
+	private int[][] BM1;
+	private double[] vals = new double[3];
+	private int m_band = 15;
+	
+	private static byte nBases = 4;
+	private static final double DBL_MAX = Double.MAX_VALUE;
+
+	private double dx = 0;
+	private double dy = 0;
+	private double sx = 0;
+	private double[][] p = new double[5][5];
+	private int[] si = {-1, 0, -1};
+	private int[] sj = {0, -1, -1};
+	
+	private double score;
+	private double log_prob;
+	private int overlap;
+	private byte[] align = new byte[3000];
+	private int outStrLen = 0;
+	private int maxeditlen;
+	private byte[] edit = new byte[3000];
+	private int editLen = 0;
+	private int local_start = 0;
+	private byte[] editR = new byte[3000];
+	private int outLenEditR = 0;
+	
+	private double prob;
+	private int interSect = 0;
+	private int extend = 5;
+	
+	private int innerStartBuffA = 0;
+	private int startBuffA = 0;
+	private int endBuffA = 0;
+	private int startR = 0;
+	private int endR = 0;
+	private static StringBuffer strTemp = new StringBuffer();
+	private static char line = '-';
+	private static String enter = "\n";
+	
+	public Alignment(int imaxalen, int imaxrlen, double indel, double miss, double hit, double unobserved_match, double pad_insert){
+		maxalen = imaxalen + 1; maxrlen = imaxrlen+1;
+		buffA = new byte[maxalen]; R = new byte[maxrlen];
+		maxeditlen = maxalen + maxrlen;
+		edit = new byte[maxeditlen];
+		
+		FM1 = new double[maxalen][maxrlen];
+		BM1 = new int[maxalen][maxrlen];
+		setCosts(indel, miss, hit, unobserved_match, pad_insert);
+		
+	}
+	
+	public void setCosts(double indel, double miss, double hit, double unobserved_match, double pad_insert){
+		dx = indel; dy = indel;
+		sx = pad_insert;
+		for(int i=0;i<5;i++){
+			for(int j=0;j<5;j++){
+				p[i][j] = miss;
+			}
+			p[i][i] = hit;
+		}
+		for(int i=0;i<5;i++){
+			p[i][4] = 0;
+			p[4][i] = unobserved_match;
+		}
+		p[4][4] = 0;
+	}
+	
+	public void setBuffA(int[] _A, int _sizeA, int _start, int _end){
+		_start = _start - extend;
+		innerStartBuffA = _start;
+		int st = Math.max(_start, 0);
+		int leftPad =  Math.max(0,0-_start);
+		int en =  Math.min(_end, _sizeA);
+		int rightPad =  Math.max(0, _end-_sizeA);
+		buffAlen = _end-_start;
+		if(st<=en){
+			int i = 0;
+			for(i=0;i<leftPad;)buffA[i++] = 4;
+			for(int j=st;j<en;j++){
+				buffA[i++] = (byte) _A[j];
+			}
+			for(int j=0;j<rightPad;j++){
+				buffA[i++] = 4;;
+			}
+		} else {
+			for(int i=0;i<buffAlen;i++)buffA[i] = 4;
+			System.out.println("SetBuffA.Error");
+			assert(false);
+		}
+	}
+	
+	
+	/**
+	 * from read to get the buffA, in this method, the start will minor to an extend length to start
+	 * @param A
+	 * @param start
+	 * @param end
+	 */
+	public void setBuffA(String A, int start, int end){
+		start = start - extend;
+		innerStartBuffA = start;
+		int st = Math.max(start,0);       int leftPad =  Math.max(0,0-start);
+		int en =  Math.min(end,A.length()); int rightPad =  Math.max(0,end-A.length());
+		buffAlen = end-start;
+		
+		if(st<=en){
+			int i = 0;
+			for(i=0;i<leftPad;)buffA[i++] = 4;
+			for(int j=st;j<en;j++){
+				buffA[i++] = this.toByte(A.charAt(j));
+			}
+			for(int j=0;j<rightPad;j++){
+				buffA[i++] = 4;;
+			}
+		} else {
+			for(int i=0;i<buffAlen;i++)buffA[i] = 4;
+			System.out.println("SetBuffA.Error");
+			assert(false);
+		}
+	}
+	
+	private byte toByte(char _a){
+		switch(_a){
+		case 'A':
+			return 0;
+		case 'C':
+			return 1;
+		case 'G':
+			return 2;
+		case 'T':
+			return 3;
+		default:
+			return 4;
+		}
+	}
+	
+	
+	public byte[] getBuffA() {
+		return buffA;
+	}
+
+	public int getBuffAlen() {
+		return buffAlen;
+	}
+
+	public byte[] getR() {
+		return R;
+	}
+
+	public int getLenR() {
+		return lenR;
+	}
+	
+	public void setR(int[] _R, int _sizeR){
+		lenR = _sizeR;
+		for(int i=0;i<lenR;i++)R[i] = (byte) _R[i];
+	}
+	
+	/**
+	 * set the read bases and length
+	 * @param r
+	 * @param isReversed
+	 */
+	public void setR(String r){
+		lenR = r.length();
+		for(int i=0;i<lenR;i++)R[i] = this.toByte(r.charAt(i));
+	}
+	
+	
+	public void bandedAlign(boolean scoreOnly) {
+		m_band = Math.abs(buffAlen-lenR);
+		//initial the second row
+		FM1[0][0] = 0;
+		for(int i=0;i<=buffAlen;i++){
+			int left_margin = 0>i-m_band?0:i-m_band;
+			int right_margin = lenR<i+m_band?lenR:i+m_band;
+			for(int j=left_margin;j<=right_margin;j++){
+				if(i==0&&j==0)continue;
+				vals[0] = -DBL_MAX; vals[1] = -DBL_MAX; vals[2] = -DBL_MAX;
+				if(i>0&&j<i+m_band){
+					vals[0] = FM1[i-1][j];
+					if (j>0 && j<lenR){
+						vals[0] = vals[0] + dx;//insertion in the Sb
+					}else{
+						vals[0] = vals[0] + sx;//insertion outside the Sb
+					}
+				}
+				if(j>left_margin){
+					vals[1] =  dy + FM1[i][j-1];
+				}
+				if(i>0&&j>0){
+					vals[2] = FM1[i-1][j-1] + p[buffA[i-1]][R[j-1]];
+				}
+				//max3
+				if (vals[0]>=vals[1] && vals[0]>=vals[2])
+				{
+					FM1[i][j] = vals[0];
+					BM1[i][j] = 0;
+				}
+				else
+				{
+					if (vals[1] >= vals[2])
+					{
+						FM1[i][j] = vals[1];
+						BM1[i][j] = 1;
+					}
+					else
+					{
+						FM1[i][j] = vals[2];
+						BM1[i][j] = 2;
+					}
+				}
+			};
+		}
+		
+		//score = FM1[buffAlen][lenR];
+		
+		int i = buffAlen; int j = lenR;
+		int id = BM1[i][j];
+		int ei = buffAlen + lenR;
+		local_start = 0;
+		int endZero = ei; boolean endFlag = false;
+		int firstZero = 0;
+		while(true){
+			edit[--ei] = (byte) (sj[id] - si[id]);
+			i = i + si[id];
+			j = j + sj[id];
+			id = BM1[i][j];
+			if(edit[ei]==0&&buffA[i]!=4&&R[j]!=4){
+				if(!endFlag){
+					endZero = ei; endFlag = true;
+				}
+				firstZero = ei;
+			}
+			if(edit[ei]==0)
+				local_start = ei;
+			if(i==0&&j==0)
+				break;
+		}
+		interSect = endZero - firstZero + 1;
+		score = 0;
+		int eii = buffAlen + lenR; i = buffAlen; j = lenR;
+		id = BM1[i][j];
+		while(true){
+			eii--;
+			i = i + si[id]; j = j + sj[id]; id = BM1[i][j];
+			if(eii<=endZero&&eii>=firstZero){
+				if(edit[eii]==0){
+					score += p[buffA[i]][R[j]];
+				}else{
+					score += dx;
+				}
+			}
+			if(i==0&&j==0)
+				break;
+		}
+		local_start -= ei;
+		
+		int l_BuffA = 0;
+		int l_R = 0;
+		endZero++;
+		for(int l=firstZero;l<endZero;l++){
+			switch(edit[l]){
+			case -1:l_R++;break;
+			case 0:l_BuffA++;l_R++;break;
+			case 1:l_BuffA++;break;
+			}
+		}
+		startBuffA=0;startR=0;
+		for(int k=ei;k<firstZero;k++){
+			if(edit[k]!=-1)startBuffA++;
+			if(edit[k]!=1)startR++;
+		}
+		editLen = buffAlen + lenR - ei;
+		for(int k = 0;k <editLen;k++)edit[k] = edit[k+ei];
+		//get the area of overlap on buffA
+		startBuffA += innerStartBuffA;
+		endBuffA = startBuffA + l_BuffA;	
+		//get the area of overlap on R
+		//startR = firstZero - ei - local_start;
+		endR = startR + l_R;
+		
+		log_prob = score;
+		//overlap = editLen- local_start - (buffAlen + lenR - 1 - endRead);
+		overlap = interSect;
+		log_prob = score;
+		
+		if(!scoreOnly){
+			System.out.println();
+			int _index = 0;
+			for(int l=0;l<editLen;l++){
+				switch(edit[l]){
+				case -1:System.out.print("-");break;
+				case 0:System.out.print(buffA[_index++]);break;
+				case 1:System.out.print(buffA[_index++]);break;
+				}
+			}
+			System.out.println();
+			_index = 0;
+			for(int l=0;l<editLen;l++){
+				switch(edit[l]){
+				case -1:System.out.print(R[_index++]);break;
+				case 0:System.out.print(R[_index++]);break;
+				case 1:System.out.print("-");break;
+				}
+			}
+		}
+		
+		if(!scoreOnly){
+			//get edit
+			outLenEditR = editLen;
+			int srcEditR = 0;
+			for(srcEditR=0;srcEditR<editLen;srcEditR++){
+				if(edit[srcEditR]==1){
+					outLenEditR--;
+				}else break;
+			}
+			for(int k=editLen-1;k>0;k--){
+				if(edit[k]==1){
+					outLenEditR--;
+				}else break;
+			}
+			
+			for(int k=0;k<outLenEditR;k++){
+				switch(edit[k+srcEditR]){
+				case 0:editR[k]=0;break;
+				case 1:editR[k]=1;break;
+				case -1:editR[k]=2;
+				}
+			}
+			//applyEdit
+			int in=0, out=0;
+			for(int k=0;k<editLen;k++){
+				switch(edit[k]){
+				case 0:
+					align[out++] = (byte) (in<lenR?R[in++]:nBases);break;
+				case -1:
+					in++;break;
+				case 1:
+					if(!(in==0||in==lenR))
+						align[out++] = (byte) nBases;
+				}
+			}
+			outStrLen = out;
+		}
+	}
+	
+	public String getAlignment(){
+		strTemp.delete(0, strTemp.length());
+		int _index = 0;
+		for(int l=0;l<editLen;l++){
+			switch(edit[l]){
+			case -1:strTemp.append(line);break;
+			case 0:strTemp.append(buffA[_index++]);break;
+			case 1:strTemp.append(buffA[_index++]);break;
+			}
+		}
+		_index = 0;
+		strTemp.append(enter);
+		for(int l=0;l<editLen;l++){
+			switch(edit[l]){
+			case -1:strTemp.append(R[_index++]);break;
+			case 0:strTemp.append(R[_index++]);break;
+			case 1:strTemp.append(line);break;
+			}
+		}
+		strTemp.append(enter);
+		return strTemp.toString();
+	}
+
+	public double getScore() {
+		return score;
+	}
+
+	public int getOutStrLen() {
+		return outStrLen;
+	}
+
+	public byte[] getAlign() {
+		return align;
+	}
+
+	public int getLocal_start() {
+		return local_start;
+	}
+
+	public int getOutLenEditR() {
+		return outLenEditR;
+	}
+	
+	
+	public byte[] getEditR() {
+		return editR;
+	}
+
+	public double getProb() {
+		return prob;
+	}
+
+	public int getInterSect() {
+		return interSect;
+	}
+
+	public void setInterSect(int interSect) {
+		this.interSect = interSect;
+	}
+
+	public double getLog_prob() {
+		return log_prob;
+	}
+
+	public int getOverlap() {
+		return overlap;
+	}
+
+	public int getStartBuffA() {
+		return startBuffA;
+	}
+
+	public int getEndBuffA() {
+		return endBuffA;
+	}
+
+	public int getStartR() {
+		return startR;
+	}
+
+	public int getEndR() {
+		return endR;
+	}
+
+	public static void main(String[] args){
+		
+		
+		String A = "TGACTTGCGTACCTTTTGTATAATGGGTCAGCGACTTATATTCTGTAGCAAGGTTAACCGAATAGGGGAGCCGAAGGGAAACCGAGTCTTAACTGGGCGTTAAGTTGCAGGGTATAGACCCGAAACCCGGTGATCTAGCCATGGGCAGGTTGAAGGTTGGGTAACACTAACTGGAGGACCGAACCGACTAATGTTGAAAAATTAGCGGATGACTTGTGGCTGGGGGTGAAAGGCCAATCAAACCGGGAGATAGCTGGTTCTCCCCGAAAGCTATTTAGGTAGCGCCTCGTGAATTCATCTCCGGGGGTAGAGCACTGTTTCGGCAAGGGGGTCATCCCGACTTACCAACCCGATGCAAACTGCGAATACCGGAGAATGTTATCACGGGAGACACACGGCGGGTGCTAACGTCCGTCGTGAAGAGGGAAACAACCCAGACCGCCAGCTAAGGTCCCAAAGTCATGGTTAAGTGGGAAACGATGTGGGAAGGCCCAGACAGCCAGGATGTTGGCTTAGAAGCAGCCATCATTTAAAGAAAGCGTAATAGCTCACTGGTCGAGTCGGCCTGCGACGG";
+		String R = "GAGCCTGAATCAGTGTGTGTGTTAGTGGAAGCGTCTGGAAAGGCGCGCGATACAGGGTGACAGCCCCGTACACAAAAATGCACATACTGTGAGCTCGATGAGTAGGGCGGGACACGTGGTATCCTGTCTGAATATGGGGGGACCATCCTCCAAGGCTAAATACTCCTGACTGACCGATAGTGAACCAGTACCGTGAGGGAAAGGCGAAAAAGAACCCCGGCGAGGGGAGTGAAAAAGAACCTGAAACCGTGTACGTACAAGCAGTGGGAGCACGCTTAGGCGTGTGACTGCGTACCTTTTGTATAATGGGTCAGCGACTTATATTCTGTAGCAAGGTTAACCGAATAGGGGAGCCGAAGGGAAACCGAGTCTTAACTGGGCGTTAAGTTGCAGGGTATAGACCCGAAACCCGGTGATCTAGCCATGGGCAGGTTGAAGGTTGGGTAACACTAACTGGAGGACCGAACCGACTAATGTTGAAAAATTAGCGGATGACTTGTGGCTGGGGGTGAAAGGCCAATCAAACCGGGAGATAGCTGGTTCTCCCCGAAAGCTATTTAGGTAGCG";
+		Alignment aligner = new Alignment(1000, 1000, -4, -4, 1, -1, 0);
+		
+		StringBuffer RR = new StringBuffer();
+		byte temp = 0;
+		for(int i=R.length()-1;i>=0;i--){
+			temp = aligner.toByte(R.charAt(i));
+			switch(temp){
+			case 0:RR.append("T");break;
+			case 1:RR.append("G");break;
+			case 2:RR.append("C");break;
+			case 3:RR.append("A");break;
+			}
+		}
+		
+		aligner.setBuffA(A, -300, 293);
+		aligner.setR(R);
+		aligner.bandedAlign(false);
+		
+	}
+
+	
+	
+}

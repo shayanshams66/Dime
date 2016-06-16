@@ -1,0 +1,159 @@
+package mer;
+
+import cap3.Contig;
+import cap3.Sequence;
+
+public class MergeObj {
+	
+	public int[] arrCommon = new int[1000000];
+	public byte[] A = new byte[5000];
+	public int lenA;
+	public byte[] R = new byte[5000];
+	public int lenR;
+	public int L;
+	public int extend = 5;
+	public Alignment aligner = new Alignment(5000, 5000, -4, -4, 1, -1, 0);
+	public byte[] consensus = new byte[3000];
+	public int lenConsensus;
+	public static double alignQuality = 0.75;
+	public AlignReadSet setAlignRead = new AlignReadSet();
+	
+	/**
+	 * 
+	 * @param _c1
+	 * @param _st1
+	 * @param _ed1
+	 * @param _rev1
+	 * @param _revE1
+	 * @param _sta1 //0 first begin; 1 second begin; 2 second end; 3 last end
+	 * @param _c2
+	 * @param _st2
+	 * @param _ed2
+	 * @param _rev2
+	 * @param _revE2
+	 * @param _sta2 //0 first begin; 1 second begin; 2 second end; 3 last end
+	 * @return
+	 */
+	public boolean merge(Contig _c1, int _st1, int _ed1, boolean _rev1, boolean _revE1, int _sta1,
+			Contig _c2, int _st2, int _ed2, boolean _rev2, boolean _revE2, int _sta2){
+		if(_revE1!=_rev1) _c1.reverse(arrCommon);
+		if(_revE2!=_rev2) _c2.reverse(arrCommon);
+		//get consensus
+		if(_sta2==1)_st2 = _c2.getSecondST();
+		else _st2 = 0;
+		_ed2 = _ed2+extend<_c2.size()?_ed2+extend:_c2.size();
+		lenR = _c2.getSeqNoEmpty(R, _st2, _ed2);
+		aligner.setR(R, lenR, lenR, 0);
+		
+		_st1 = (_ed2 - _st2);//length between _ed1 and _st1;
+		if(_sta1==2) _ed1 = _c1.getSecondED();
+		else _ed1 = _c1.size();
+		_st1 = _ed1 - _st1 - 100;
+		_st1 = _st1<=extend?0:_st1-extend;
+		lenA = _c1.getSeqNoEmpty(A, _st1, _ed1);
+		L = lenA>lenR+extend?lenA:lenR+extend;
+		aligner.setBuffA(A, lenA, 0, L);
+		aligner.bandedAlign(true);
+		if(aligner.getScore()/((double)aligner.getLenConsensus())<alignQuality){
+			return false;
+		}
+		int oldst1, oldst2;
+		oldst1 = _st1; oldst2 = _st2;
+		_st1 = _c1.getPosFromNoEmWithEm(oldst1, aligner.getStartA(0));
+		_ed1 = _c1.getPosFromNoEmWithEm(oldst1, aligner.getEndA(0)-1);
+		_st2 = _c2.getPosFromNoEmWithEm(oldst2, aligner.getStartR(0));
+		if(_st2>oldst2)return false;
+		_ed2 = _c2.getPosFromNoEmWithEm(oldst2, aligner.getEndR(0)-1);
+		if(_c2.getId()==10195)
+			System.out.println("check");
+		aligner.getConsensus(consensus);
+		lenConsensus = aligner.getLenConsensus();
+		
+		//align reads
+		setAlignRead.clean();
+		_c1.getSetAlignRead(_st1, _ed1, setAlignRead, true);
+		_c2.getSetAlignRead(_st2, _ed2, setAlignRead, false);
+		lenConsensus = setAlignRead.align(aligner, consensus, lenConsensus);
+		this.updateConsensus(lenConsensus, setAlignRead.getInterCon());
+		//determine merge or not
+		if(!likelihood(_c1, _c2, _st1, _ed1, _st2, _ed2, lenConsensus, setAlignRead.getInterCon())){
+			return false;
+		}
+		
+		//connect two contig
+		//_c2.show();
+		/*if(_c1.getId()==493)
+			System.out.println("check");*/
+		int sizeContig = _st1 + lenConsensus + (_c2.size() - _ed2 - 1);
+		Sequence contigNew = new Sequence(sizeContig);
+		for(int i=0;i<_st1;i++) contigNew.add(_c1.getSeq(i));
+		for(int i=0;i<lenConsensus;i++) contigNew.add(setAlignRead.interCon[i]);
+		for(int i=_ed2+1;i<_c2.size();i++) contigNew.add(_c2.getSeq(i));
+		if(_sta1==2)_c1.deleteRead(2);
+		if(_sta2==1)_c2.deleteRead(1);
+		setAlignRead.connectReadLeft(_st1);
+		_c1.setSequence(contigNew);
+		_c1.addContig(_c2);
+		_c2.addToOtherContig(_c1, _st1, _st2, _st1 + lenConsensus-1, _ed2, _rev2);
+		setAlignRead.connectReadRight(_st1);
+		_c1.secondInfo();
+		//_c1.show();
+		return true;
+	}
+	
+	public boolean likelihood(Contig _c1, Contig _c2, int _st1, int _ed1, int _st2, int _ed2,
+			int _lenConsensus, int[] _consensus){
+		double lam1 = _c1.calLamda(arrCommon, arrCount);
+		arrCount[2] = arrCount[0]; arrCount[3] = arrCount[1];
+		double lam2 = _c2.calLamda(arrCommon, arrCount);
+		double lam3 = ((double)(arrCount[0]+arrCount[2]))/((double)(arrCount[1]+arrCount[3] - (_ed1 - _st1)));
+		double logOriginal = 0;
+		double logNew = 0;
+		//get original
+		for(int i=_st1;i<=_ed1;i++){
+			_c1.getHitMiss(i, arrCount);
+			logOriginal += calSingleLikelihood(lam1, arrCount[0], arrCount[1], arrCount[2]);
+		}
+		for(int i=_st2;i<=_ed2;i++){
+			_c2.getHitMiss(i, arrCount);
+			logOriginal += calSingleLikelihood(lam2, arrCount[0], arrCount[1], arrCount[2]);
+		}
+		//get the new
+		for(int i=0;i<_lenConsensus;i++){
+			setAlignRead.getHitMiss(i, _consensus, arrCount);
+			logNew += calSingleLikelihood(lam3, arrCount[0], arrCount[1], arrCount[2]);
+		}
+		if(logOriginal>logNew){
+			return false;
+		}
+		return true;
+	}
+	
+	private static double LogHit = Math.log(0.9);
+	private static double LogMiss = Math.log(0.1);
+	private static int[] arrCount = new int[6];
+	
+	public static double calSingleLikelihood(double _lamda, int _hit, int _miss, int _empty){
+		return LogHit*_hit+LogMiss*(_miss+_empty) + Poisson(_lamda, _hit+_miss);
+	}
+	
+	public static double Poisson(double _lamda, int _k){
+		double result = 0;
+		result = Math.pow(_lamda, _k)*Math.pow(Math.E, -_lamda);
+		for(int i=1;i<=_k;i++){
+			result /= i;
+		}
+		return Math.log(result);
+	}
+	
+	/**
+	 * update the consensus
+	 * @param _lenConsensus
+	 * @param _consensus
+	 */
+	public void updateConsensus(int _lenConsensus, int[] _consensus){
+		for(int i=0;i<_lenConsensus;i++){
+			setAlignRead.getPosCount(i, _consensus, arrCount);
+		}
+	}
+}
